@@ -70,3 +70,25 @@ process bcftools {
   bcftools view -t "^MT" -f PASS -Oz -o ${name}.vcf.gz ${name}.filt.vcf.gz
   """
 }
+
+/*--------------------------------------------------
+  Convert from 23AndMe format to VCF
+---------------------------------------------------*/
+
+process vcftools {
+  tag "${name}"
+  container 'lifebitai/vcftools'
+
+  input:
+  set val(name), file(vcf) from vcfGenotypes
+
+  output:
+  set val(name), file("*") into beagle_gl
+  // set val(name), file("${name}.vcf.gz") into beagle_gl
+
+  script:
+  """
+  gzip -fd $vcf
+  vcftools --vcf ${name}.vcf --out test --BEAGLE-GL --chr 1,2
+  """
+}
