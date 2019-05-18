@@ -33,62 +33,111 @@ if(params.genotypes_path) {
 }
 
 /*--------------------------------------------------
-  Make channel(s) for FASTA input files
+  Make channel(s) for reference panel(s)
 ---------------------------------------------------*/
 
-Channel.fromPath(params.fasta)
-           .ifEmpty { exit 1, "FASTA reference file not found: ${params.fasta}" }
-           .set { fasta }
-Channel.fromPath(params.fai)
-           .ifEmpty { exit 1, "FASTA index file not found: ${params.fai}" }
-           .set { fai }
+Channel.fromPath(params.iadmix_ref)
+           .ifEmpty { exit 1, "iAdmix reference panel file not found: ${params.iadmix_ref}" }
+           .set { iadmix_ref }
+
+Channel.fromPath(params.fastngsadmix_fname)
+           .ifEmpty { exit 1, "fastNGSadmix reference panel file not found: ${params.fastngsadmix_fname}" }
+           .set { fastngsadmix_fname }
+Channel.fromPath(params.fastngsadmux_nname)
+           .ifEmpty { exit 1, "fastNGSadmix Nname file not found: ${params.fastngsadmux_nname}" }
+           .set { fastngsadmux_nname }
+fastngsadmix_ref = fastngsadmix_fname.merge(fastngsadmux_nname)
 
 /*--------------------------------------------------
-  Convert from 23AndMe format to VCF
+  Convert from 23AndMe format to plink
 ---------------------------------------------------*/
 
-process bcftools {
+process convert_23andMe_to_plink {
   tag "${name}"
-  container 'lifebitai/bcftools'
+  container 'lifebitai/ancestry'
 
   input:
   set val(name), file(genotype_file) from genoChannel
-  file fasta from fasta
-  file fai from fai
 
   output:
-  set val(name), file("${name}.vcf.gz") into vcfGenotypes
+  set val(name), file("${name}.map"), file("${name}.ped") into plinkGenotypes, plinkGenotypesCombine
 
   script:
   """
-  # convert ancestry files
-  sed 's/23/X/g; s/24/Y/g; s/25/MT/g; s/26/X/g' ${genotype_file} > tmp.txt
-  # for lines where genotype contains one allele (non-autosomal chrs), duplicate the allele so that it's homozygous
-  awk '{OFS="\t"; if (((length(\$4) == 2 ))) \$4=\$4\$4; print \$0}' tmp.txt > ${genotype_file}
-  bcftools convert --tsv2vcf ${genotype_file}  -f ${fasta} -s $name -Oz -o ${name}.tmp.vcf.gz
-  bcftools filter --set-GTs . -e 'FMT/GT="."' -Oz -o ${name}.filt.vcf.gz ${name}.tmp.vcf.gz
-  bcftools view -t "^MT" -f PASS -Oz -o ${name}.vcf.gz ${name}.filt.vcf.gz
+  23andme-to-plink.py $genotype_file
   """
 }
 
 /*--------------------------------------------------
-  Convert from 23AndMe format to VCF
+  Generate plink binary files
 ---------------------------------------------------*/
 
-// process vcftools {
-//   tag "${name}"
-//   container 'lifebitai/vcftools'
+process plink {
+  tag "${name}"
+  container 'alliecreason/plink:1.90'
+  publishDir "${params.outdir}/plink", mode: 'copy'
 
-//   input:
-//   set val(name), file(vcf) from vcfGenotypes
+  input:
+  set val(name), file(map), file(ped) from plinkGenotypes
 
-//   output:
-//   set val(name), file("*") into beagle_gl
-//   // set val(name), file("${name}.vcf.gz") into beagle_gl
+  output:
+  // set val(name), file("${name}.bed"), file("${name}.bim"), file("${name}.fam") into plink
+  set val(name), file("${name}.map"), file("${name}.ped"), file("${name}.bed"), file("${name}.bim"), file("${name}.fam") into plink, plink2
 
-//   script:
-//   """
-//   gzip -fd $vcf
-//   vcftools --vcf ${name}.vcf --out test --BEAGLE-GL --chr 1,2
-//   """
-// }
+  script:
+  """
+  plink --file ${name} --list-duplicate-vars ids-only suppress-first
+  plink --file ${name} --recode -exclude plink.dupvar --out ${name}
+  plink --file ${name} --out ${name}
+  """
+}
+
+plink
+    .combine(fastngsadmix_ref)
+    .set { fastngsadmix }
+plink2
+    .combine(iadmix_ref)
+    .set { iadmix }
+
+/*--------------------------------------------------
+  Estimate admixture proportions from plink files
+---------------------------------------------------*/
+
+process fastNGSadmix {
+  tag "${name}"
+  container 'lifebitai/ancestry'
+  publishDir "${params.outdir}/fastNGSadmix", mode: 'copy'
+
+  input:
+  set val(name), file(map), file(ped), file(bed), file(bim), file(fam), file(ref), file(nname) from fastngsadmix
+
+  output:
+  set val(name), file("${name}.log"), file("${name}.qopt") into fastngsadmix_out
+
+  script:
+  """
+  fastNGSadmix -plink ${name} -fname $ref -Nname $nname -out ${name} -whichPops all
+  """
+}
+
+/*--------------------------------------------------
+  Estimate admixture coefficients from plink files
+---------------------------------------------------*/
+
+process iAdmix {
+  tag "${name}"
+  container 'lifebitai/ancestry'
+  publishDir "${params.outdir}/iAdmix", mode: 'copy'
+
+  input:
+  set val(name), file(map), file(ped), file(bed), file(bim), file(fam), file(ref) from iadmix
+
+  output:
+  set val(name), file("out.${name}.input"), file("out.${name}.input.ancestry"), file("iAdmix.txt") into iadmix_out
+
+  script:
+  """
+  runancestry.py --plink ${name} -f $ref -o out --path /ancestry/
+  cp .command.log iAdmix.txt
+  """
+}
