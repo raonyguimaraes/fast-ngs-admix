@@ -141,3 +141,26 @@ process iAdmix {
   cp .command.log iAdmix.txt
   """
 }
+
+/*--------------------------------------------------
+  Generate table report to display on Deploit
+---------------------------------------------------*/
+
+process table_report {
+  publishDir "${params.outdir}/Visualisations", mode: 'copy'
+  container 'lifebitai/vizjson'
+
+  input:
+  set val(name), file(log), file(qopt) from fastngsadmix_out
+
+  output:
+  file '.report.json' into report
+
+  script:
+  """
+  sed -i 's/[ \t]*\$//' $qopt
+  sed 's/ /,/g' $qopt > ${name}.csv
+  csv2json.py ${name}.csv "Ancestry admixture proportion estimates generated from ${name}.txt 23andMe file" ${name}.json
+  combine_reports.py .
+  """
+}
