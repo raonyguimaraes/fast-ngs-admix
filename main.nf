@@ -81,7 +81,6 @@ process plink {
   set val(name), file(map), file(ped) from plinkGenotypes
 
   output:
-  // set val(name), file("${name}.bed"), file("${name}.bim"), file("${name}.fam") into plink
   set val(name), file("${name}.map"), file("${name}.ped"), file("${name}.bed"), file("${name}.bim"), file("${name}.fam") into plink, plink2
 
   script:
