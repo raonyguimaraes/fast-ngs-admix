@@ -132,12 +132,20 @@ process iAdmix {
   set val(name), file(map), file(ped), file(bed), file(bim), file(fam), file(ref) from iadmix
 
   output:
-  set val(name), file("out.${name}.input"), file("out.${name}.input.ancestry"), file("iAdmix.txt") into iadmix_out
+  set val(name), file("out.${name}.input"), file("out.${name}.input.ancestry"), file("${name}_iadmix.log"), file("${name}_iadmix.csv") into iadmix_out
 
   script:
   """
   runancestry.py --plink ${name} -f $ref -o out --path /ancestry/
-  cp .command.log iAdmix.txt
+  cp .command.log ${name}_iadmix.log
+
+  # generate csv file from iadmix output
+  grep -Poo "[a-zA-Z]+:[\\S]+" ${name}_iadmix.log | head -n 27 > tmp.txt
+  awk -F: '{print \$1}' tmp.txt > pop.txt
+  awk -F: '{print \$2}' tmp.txt > prop.txt
+  awk 'BEGIN { ORS = "," } { print }' pop.txt | sed 's/,\$//g' > ${name}_iadmix.csv
+  sed -i -e '\$a\\' ${name}_iadmix.csv
+  awk 'BEGIN { ORS = "," } { print }' prop.txt | sed 's/,\$//g' >> ${name}_iadmix.csv
   """
 }
 
@@ -150,16 +158,14 @@ process table_report {
   container 'lifebitai/vizjson'
 
   input:
-  set val(name), file(log), file(qopt) from fastngsadmix_out
+  set val(name), file(input), file(ancestry), file(log), file(csv) from iadmix_out
 
   output:
-  file '.report.json' into report
+  file('.report.json') into report
 
   script:
   """
-  sed -i 's/[ \t]*\$//' $qopt
-  sed 's/ /,/g' $qopt > ${name}.csv
-  csv2json.py ${name}.csv "Ancestry admixture proportion estimates generated from ${name}.txt 23andMe file" ${name}.json
+  csv2json.py $csv "Ancestry admixture proportion estimates" ${name}_iadmix.json
   combine_reports.py .
   """
 }
