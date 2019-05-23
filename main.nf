@@ -113,6 +113,8 @@ process fastNGSadmix {
   output:
   set val(name), file("${name}.log"), file("${name}.qopt") into fastngsadmix_out
 
+  when: params.tool.toLowerCase().contains("fastngsadmix")
+
   script:
   """
   fastNGSadmix -plink ${name} -fname $ref -Nname $nname -out ${name} -whichPops all
@@ -133,6 +135,8 @@ process iAdmix {
 
   output:
   set val(name), file("out.${name}.input"), file("out.${name}.input.ancestry"), file("${name}_iadmix.log"), file("${name}_iadmix.csv") into iadmix_out
+
+  when: params.tool.toLowerCase().contains("iadmix")
 
   script:
   """
@@ -162,6 +166,8 @@ process table_report {
 
   output:
   file('.report.json') into report
+
+  when: params.tool.toLowerCase().contains("iadmix")
 
   script:
   """
