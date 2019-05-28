@@ -27,7 +27,7 @@ Deploit is a bioinformatics platform, developed by Lifebit, where you can run yo
 
 It is free for indivudal users to [sign-up](https://deploit.lifebit.ai/register)
 
-You can run this pipeline under the modules section on the pipelines page, where this pipeline is named `New ancestry`. See an example job [here]() including the output of the pipelines
+You can run this pipeline under the modules section on the pipelines page, where this pipeline is named `New ancestry`. See an example job [here](https://deploit.lifebit.ai/public/jobs/5cece61584e82a00a83fc40a) including the output of the pipelines
 
 ## Testdata
 Testdata & reference files including the reference panel(s) are stored on the AWS S3 bucket [`s3://lifebit-featured-datasets/modules/ancestry/`](https://s3.console.aws.amazon.com/s3/buckets/lifebit-featured-datasets/modules/ancestry/?region=eu-west-1&tab=overview). This also includes an example 23andMe file.
